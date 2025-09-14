@@ -338,10 +338,10 @@ class TestErrorHandling:  # pylint: disable=too-few-public-methods
         mock_diarization_pipeline.side_effect = None
 
 
-class TestBackwardCompatibility:
+class TestBackwardCompatibility:  # pylint: disable=too-few-public-methods
     """Test backward compatibility features."""
 
-    def test_diarization_model_property(self, mock_whisperx: MagicMock) -> None:
+    def test_diarization_model_property(self) -> None:
         """Test that diarization_model property provides backward compatibility."""
         with Diarizer(device="cpu", hf_token="test-token") as diarizer:
             # The diarization_model property should return the same as model
@@ -380,7 +380,7 @@ class TestSkipDiarization:
             assert result is input_transcript
 
 
-class TestModelStateValidation:
+class TestModelStateValidation:  # pylint: disable=too-few-public-methods
     """Test model state validation."""
 
     def test_call_without_context_manager_raises_error(self) -> None:
@@ -524,7 +524,7 @@ class TestLogging:
             )
 
 
-class TestModelNameProperty:
+class TestModelNameProperty:  # pylint: disable=too-few-public-methods
     """Test model name property."""
 
     def test_model_name_returns_correct_value(self) -> None:
