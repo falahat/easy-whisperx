@@ -1,0 +1,13 @@
+data/*
+data
+__pycache__/
+.coverage
+*egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+htmlcov/
+.env
+build/
+.venv
+.ruff_cache/
