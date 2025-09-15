@@ -27,7 +27,8 @@ dependencies = [
     "torch",
     "pydub",
     "pandas",
-    "whisperx@git+https://github.com/falahat/whisperX.git"
+    "whisperx-typed",
+    "whisperx-stubs"
 ]
 
 [project.optional-dependencies]
