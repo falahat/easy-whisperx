@@ -1,4 +1,5 @@
 """Basic functionality tests for easy_whisperx."""
+
 import unittest
 
 
