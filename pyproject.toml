@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "easy-whisperx"
-version = "0.0.7"
+version = "0.0.8"
 description = "A Python package for easy transcription using WhisperX."
 authors = [
     {name = "Aryan Falahtpisheh", email = "aryanfalahat@gmail.com"},
@@ -28,7 +28,7 @@ dependencies = [
     "pydub",
     "pandas",
     "whisperx-typed>=3.4.5",
-    "whisperx-stubs"
+    "whisperx-stubs>=3.4.5"
 ]
 
 [project.optional-dependencies]
