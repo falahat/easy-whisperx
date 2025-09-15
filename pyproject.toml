@@ -10,7 +10,7 @@ authors = [
     {name = "Aryan Falahtpisheh", email = "aryanfalahat@gmail.com"},
 ]
 readme = "README.md"
-license = {text = "MIT"}
+license = { text = "BSD-2-Clause" }
 keywords = ["whisperx", "transcription", "audio", "speech-to-text"]
 classifiers = [
     "Development Status :: 4 - Beta",
