@@ -28,6 +28,9 @@ class Diarizer(BaseWhisperxModel[DiarizationPipeline]):
     def __init__(self, hf_token: str, device: str = "auto"):
         super().__init__(device)
         self.hf_token = hf_token
+        # Per-speaker voiceprints from the most recent __call__, surfaced for
+        # voice-matching consumers. Empty until diarization has run.
+        self.speaker_embeddings: dict[str, list[float]] = {}
 
     def _load_model(self, tracker: MetricScope) -> None:
         """Loads the diarization pipeline from WhisperX."""
@@ -61,9 +64,10 @@ class Diarizer(BaseWhisperxModel[DiarizationPipeline]):
                 return_embeddings=True,
             )
 
-            num_speakers = (
-                len(speaker_embeddings) if isinstance(speaker_embeddings, dict) else 0
+            self.speaker_embeddings = (
+                speaker_embeddings if isinstance(speaker_embeddings, dict) else {}
             )
+            num_speakers = len(self.speaker_embeddings)
 
             logger.info("Assigning speakers to words...")
             result_with_speakers = cast(
