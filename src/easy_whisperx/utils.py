@@ -1,12 +1,12 @@
 """
 Utility functions for transcription operations.
 
-This module provides helper functions for device configuration, audio loading,
-and other common transcription utilities.
+This module provides helper functions for device configuration and audio
+loading.
 """
 
 import os
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -15,8 +15,11 @@ import whisperx
 from .performance import PerformanceTracker
 
 
-def _determine_device_config(device: str, compute_type: str) -> Tuple[str, str]:
-    """Determines the optimal device and compute type configuration."""
+def resolve_device_config(device: str, compute_type: str) -> Tuple[str, str]:
+    """Resolve ``"auto"`` device/compute_type to concrete values.
+
+    A no-op for already-concrete inputs, so it is safe to call repeatedly.
+    """
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -26,13 +29,21 @@ def _determine_device_config(device: str, compute_type: str) -> Tuple[str, str]:
     return device, compute_type
 
 
-def load_audio(audio_path: str, performance_tracker: PerformanceTracker) -> np.ndarray:
-    """Loads and resamples audio from a file path."""
+def load_audio(
+    audio_path: str,
+    metrics: Optional[PerformanceTracker] = None,
+) -> np.ndarray:
+    """Load and resample audio from a file path.
+
+    Pass a :class:`~easy_whisperx.performance.PerformanceTracker` to record
+    load timing and file size; omit it to just load the audio.
+    """
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-    with performance_tracker.track("load_audio") as tracker:
-        file_size = os.path.getsize(audio_path)
-        tracker["file_size_bytes"] = file_size
-        audio = whisperx.load_audio(audio_path)
-        return audio
+    if metrics is None:
+        return np.asarray(whisperx.load_audio(audio_path))
+
+    with metrics.track("load_audio") as scope:
+        scope["file_size_bytes"] = os.path.getsize(audio_path)
+        return np.asarray(whisperx.load_audio(audio_path))

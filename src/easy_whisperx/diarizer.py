@@ -6,42 +6,32 @@ to different segments of transcribed audio using WhisperX diarization models.
 """
 
 import logging
+from typing import cast
 
 import numpy as np
 import whisperx
-from whisperx import AlignedTranscriptionResult, TranscriptionResult
+from whisperx.diarize import DiarizationPipeline
+from whisperx.schema import AlignedTranscriptionResult, TranscriptionResult
 
 from .base_model import BaseWhisperxModel
-from .performance import PerformanceTracker
+from .performance import MetricScope
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
-class Diarizer(BaseWhisperxModel[whisperx.DiarizationPipeline]):
+class Diarizer(BaseWhisperxModel[DiarizationPipeline]):
     """Manages the diarization model for speaker identification."""
 
-    def __init__(self, device: str, hf_token: str):
+    model_name = "diarization"
+
+    def __init__(self, hf_token: str, device: str = "auto"):
         super().__init__(device)
         self.hf_token = hf_token
 
-    @property
-    def model_name(self) -> str:
-        """Returns the model name for logging."""
-        return "diarization"
-
-    @property
-    def diarization_model(self) -> whisperx.DiarizationPipeline | None:
-        """Provides backward compatibility for the loaded model."""
-        return self.model
-
-    # pylint: disable=unused-argument
-    def _load_model(self, tracker: PerformanceTracker) -> None:
+    def _load_model(self, tracker: MetricScope) -> None:
         """Loads the diarization pipeline from WhisperX."""
-        # pylint: disable=attribute-defined-outside-init
-        self.model = whisperx.DiarizationPipeline(
-            use_auth_token=self.hf_token, device=self.device
-        )
+        self.model = DiarizationPipeline(token=self.hf_token, device=self.device)
 
     def __call__(
         self,
@@ -76,7 +66,10 @@ class Diarizer(BaseWhisperxModel[whisperx.DiarizationPipeline]):
             )
 
             logger.info("Assigning speakers to words...")
-            result_with_speakers = whisperx.assign_word_speakers(diarize_df, transcript)
+            result_with_speakers = cast(
+                TranscriptionResult | AlignedTranscriptionResult,
+                whisperx.assign_word_speakers(diarize_df, transcript),
+            )
 
             tracker["device"] = self.device
             tracker["min_speakers"] = min_speakers

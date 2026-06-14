@@ -2,20 +2,19 @@
 Base model class for WhisperX transcription components.
 
 This module provides the abstract base class for WhisperX-based models,
-handling common functionality like model loading, cleanup, and resource
-management.
+handling device resolution, model loading, cleanup, and resource management.
 """
 
 import abc
 import gc
 import logging
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 import numpy as np
 import torch
 
-from .performance import PerformanceTracker
-from .utils import load_audio
+from .performance import MetricScope, PerformanceTracker
+from .utils import load_audio, resolve_device_config
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -23,30 +22,28 @@ logger = logging.getLogger(__name__)
 # Generic Type for the model
 _ModelT = TypeVar("_ModelT")
 # Generic Type for the class itself (for proper return type from __enter__)
-_SelfT = TypeVar("_SelfT", bound="BaseWhisperxModel")
+_SelfT = TypeVar("_SelfT", bound="BaseWhisperxModel[Any]")
 
 
 class BaseWhisperxModel(abc.ABC, Generic[_ModelT]):
     """
     Abstract base class for managing WhisperX models.
 
-    Handles model loading, performance tracking, and GPU memory cleanup
-    as a context manager.
+    Handles device resolution, model loading, performance tracking, and GPU
+    memory cleanup as a context manager. Subclasses set the ``model_name``
+    class attribute and implement :meth:`_load_model`.
     """
 
-    def __init__(self, device: str):
-        self.device = device
+    #: Subclasses MUST set this; used for logging and metric keys.
+    model_name: str
+
+    def __init__(self, device: str = "auto"):
+        self.device, _ = resolve_device_config(device, "auto")
         self.model: Optional[_ModelT] = None
         self.metrics = PerformanceTracker(self.model_name)
 
-    @property
     @abc.abstractmethod
-    def model_name(self) -> str:
-        """Model name for logging."""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def _load_model(self, tracker: PerformanceTracker) -> None:
+    def _load_model(self, tracker: MetricScope) -> None:
         """
         Subclasses must implement this to load their specific model.
         The implementation should set `self.model`.

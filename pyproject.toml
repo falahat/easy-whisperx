@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "easy-whisperx"
-version = "0.0.8"
+version = "0.1.0"
 description = "A Python package for easy transcription using WhisperX."
 authors = [
     {name = "Aryan Falahtpisheh", email = "aryanfalahat@gmail.com"},
@@ -15,7 +15,7 @@ keywords = ["whisperx", "transcription", "audio", "speech-to-text"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -27,8 +27,7 @@ dependencies = [
     "torch",
     "pydub",
     "pandas",
-    "whisperx-typed>=3.4.5",
-    "whisperx-stubs>=3.4.5"
+    "whisperx>=3.8.6",
 ]
 
 [project.optional-dependencies]
@@ -75,7 +74,7 @@ extend-exclude = '''
 '''
 
 [tool.coverage.run]
-source = ["./podcast_tracker"]
+source = ["src/easy_whisperx"]
 omit = [
     "*/tests/*",
     "*/test_*",
@@ -105,6 +104,13 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 explicit_package_bases = true
+
+# Upstream whisperx ships inline type annotations but no py.typed marker, so
+# mypy ignores them by default. Follow the source to use those types directly.
+# (pyright/Pylance already do this via useLibraryCodeForTypes=true.)
+[[tool.mypy.overrides]]
+module = "whisperx.*"
+follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -79,7 +79,7 @@ class TestDiarizer:
             assert diarizer.model is not None
             # Verify diarization pipeline was loaded
             mock_whisperx.DiarizationPipeline.assert_called_once_with(
-                use_auth_token="test-token", device="cpu"
+                token="test-token", device="cpu"
             )
 
     def test_diarizer_call_with_audio_data(
@@ -336,17 +336,6 @@ class TestErrorHandling:  # pylint: disable=too-few-public-methods
 
         # Reset the mock for other tests
         mock_diarization_pipeline.side_effect = None
-
-
-class TestBackwardCompatibility:  # pylint: disable=too-few-public-methods
-    """Test backward compatibility features."""
-
-    def test_diarization_model_property(self) -> None:
-        """Test that diarization_model property provides backward compatibility."""
-        with Diarizer(device="cpu", hf_token="test-token") as diarizer:
-            # The diarization_model property should return the same as model
-            assert diarizer.diarization_model is diarizer.model
-            assert diarizer.diarization_model is not None
 
 
 class TestSkipDiarization:

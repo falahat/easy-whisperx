@@ -8,7 +8,7 @@ import pytest
 
 from easy_whisperx.utils import (
     load_audio,
-    _determine_device_config,
+    resolve_device_config,
 )
 from easy_whisperx.performance import PerformanceTracker
 
@@ -19,20 +19,20 @@ class TestDeviceConfiguration:
     def test_auto_device_cuda_available(self, mock_torch: MagicMock) -> None:
         """Test auto device selection when CUDA is available."""
         mock_torch.cuda.is_available.return_value = True
-        device, compute_type = _determine_device_config("auto", "auto")
+        device, compute_type = resolve_device_config("auto", "auto")
         assert device == "cuda"
         assert compute_type == "float16"
 
     def test_auto_device_cuda_unavailable(self) -> None:
         """Test auto device selection when CUDA is not available."""
         with patch("torch.cuda.is_available", return_value=False):
-            device, compute_type = _determine_device_config("auto", "auto")
+            device, compute_type = resolve_device_config("auto", "auto")
             assert device == "cpu"
             assert compute_type == "int8"
 
     def test_explicit_device_settings(self) -> None:
         """Test explicit device and compute type settings."""
-        device, compute_type = _determine_device_config("cpu", "float16")
+        device, compute_type = resolve_device_config("cpu", "float16")
         assert device == "cpu"
         assert compute_type == "float16"
 
@@ -40,18 +40,18 @@ class TestDeviceConfiguration:
         """Test mixed auto and explicit device settings."""
         # Auto device with explicit compute type
         mock_torch.cuda.is_available.return_value = True
-        device, compute_type = _determine_device_config("auto", "int8")
+        device, compute_type = resolve_device_config("auto", "int8")
         assert device == "cuda"
         assert compute_type == "int8"
 
         # Explicit device with auto compute type
-        device, compute_type = _determine_device_config("cuda", "auto")
+        device, compute_type = resolve_device_config("cuda", "auto")
         assert device == "cuda"
         assert compute_type == "float16"  # Since device is cuda
 
     def test_cpu_device_auto_compute(self) -> None:
         """Test CPU device with auto compute type."""
-        device, compute_type = _determine_device_config("cpu", "auto")
+        device, compute_type = resolve_device_config("cpu", "auto")
         assert device == "cpu"
         assert compute_type == "int8"  # CPU gets int8
 

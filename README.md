@@ -92,73 +92,69 @@ pip3 install torch torchvision torchaudio --index-url https://download.pytorch.o
 
 ## Quick Start
 
-### Basic Transcription
+### Quick start — `transcribe()`
+
+```python
+from easy_whisperx import transcribe
+
+# Transcription only. device / compute_type / batch_size are auto-detected.
+result = transcribe("audio.mp3", model_size="base")
+for seg in result.transcript["segments"]:
+    print(seg["start"], seg["text"])
+```
+
+Alignment and diarization are **optional** follow-up steps — chain only the ones you want:
+
+```python
+# Transcribe + word-level alignment
+result = transcribe("audio.mp3", model_size="base").align()
+
+# Transcribe + speaker diarization (no alignment)
+result = transcribe("audio.mp3", model_size="base").diarize(hf_token)
+
+# All three
+result = transcribe("audio.mp3", model_size="base").align().diarize(hf_token)
+
+print(result.aligned, result.diarized)   # which stages ran
+```
+
+Each stage loads and unloads one model, so at most one model occupies VRAM at a
+time, and the audio is decoded once and reused across stages.
+
+### Advanced — the stage classes
+
+For full control (custom per-stage handling, per-stage metrics), use the
+context-managed stage classes directly:
+
+```python
+from easy_whisperx import Transcriber, Aligner, Diarizer
+
+with Transcriber("base") as transcriber:        # device/compute/batch default to "auto"
+    transcript = transcriber("audio.mp3")
+
+with Aligner("en") as aligner:
+    aligned = aligner(transcript["segments"], "audio.mp3")
+
+with Diarizer(hf_token) as diarizer:
+    final = diarizer(aligned, "audio.mp3")
+```
+
+### Batch processing
+
+Each stage is a callable context manager, so batching is a plain loop: load the
+model once and collect a typed list of results.
 
 ```python
 from easy_whisperx import Transcriber
 
-# Initialize transcriber
-transcriber = Transcriber(
-    model_size="base",
-    device="cuda",  # or "cpu" 
-    compute_type="float16",
-    batch_size=16
-)
-
-# Transcribe audio file
-with transcriber:
-    result = transcriber("path/to/audio.mp3")
-    print(result["text"])
-```
-
-### Complete Pipeline with Alignment and Diarization
-
-```python
-import os
-from easy_whisperx import Transcriber, Aligner, Diarizer
-
-audio_path = "path/to/audio.mp3"
-hf_token = os.getenv("HF_TOKEN")
-
-# Step 1: Transcribe
-with Transcriber("base", "cuda", "float16", 16) as transcriber:
-    transcript = transcriber(audio_path)
-
-# Step 2: Align words
-with Aligner("cuda", "en") as aligner:
-    aligned_transcript = aligner(transcript["segments"], audio_path)
-
-# Step 3: Diarize speakers (optional)
-if hf_token:
-    with Diarizer("cuda", hf_token) as diarizer:
-        final_transcript = diarizer(aligned_transcript, audio_path)
-else:
-    final_transcript = aligned_transcript
-
-print(final_transcript)
-```
-
-### Bulk Processing
-
-```python
-from easy_whisperx import BulkExecutor, Transcriber
-
 audio_files = ["file1.mp3", "file2.mp3", "file3.mp3"]
-
-with Transcriber("base", "cuda", "float16", 16) as transcriber:
-    with BulkExecutor(transcriber) as executor:
-        def transcribe_file(model, audio_path, tracker):
-            result = model(audio_path)
-            tracker["segments_count"] = len(result.get("segments", []))
-            
-        executor.for_each(audio_files, transcribe_file)
-        metrics = executor.get_metrics()
-        print(f"Bulk processing metrics: {metrics}")
+with Transcriber("base") as transcriber:
+    results = [transcriber(path) for path in audio_files]
 ```
 
 ## WhisperX Integration
 
-This package uses WhisperX as its core transcription engine. We maintain a fork at [falahat/whisperx](https://github.com/falahat/whisperx) that may include specific optimizations or compatibility fixes, but all credit for the underlying transcription technology goes to the original [WhisperX project](https://github.com/m-bain/whisperX).
+This package is a thin wrapper around the upstream [WhisperX project](https://github.com/m-bain/whisperX), which is its core transcription engine. All credit for the underlying transcription technology goes to WhisperX.
 
 The original WhisperX provides:
 
@@ -230,10 +226,11 @@ flake8 src/easy_whisperx/
 
 The package is built with a modular architecture:
 
+- **`transcribe()`** - Top-level entry point; returns a `Transcription` you can `.align()` / `.diarize()`
+- **`Transcription`** - Result object carrying the transcript and the optional-stage methods
 - **`Transcriber`** - Main transcription using WhisperX models
 - **`Aligner`** - Word-level timestamp alignment
 - **`Diarizer`** - Speaker identification and assignment
-- **`BulkExecutor`** - Bulk processing with performance tracking
 - **`PerformanceTracker`** - Performance metrics collection
 - **`BaseWhisperxModel`** - Abstract base for model management
 - **Utility functions** - Audio loading and device configuration
@@ -252,10 +249,10 @@ The package includes automatic resource management:
 ### Device Configuration
 
 ```python
-from easy_whisperx.utils import _determine_device_config
+from easy_whisperx.utils import resolve_device_config
 
 # Automatic device selection
-device, compute_type = _determine_device_config("auto", "auto")
+device, compute_type = resolve_device_config("auto", "auto")
 # Returns ("cuda", "float16") if GPU available, ("cpu", "int8") otherwise
 ```
 

@@ -35,12 +35,12 @@ class TestTranscriber:
             compute_type="int8",
             batch_size=16,
         ) as transcriber:
-            assert transcriber.transcription_model is not None
+            assert transcriber.model is not None
             # Verify model was loaded
             mock_whisperx.load_model.assert_called()
 
         # After context exit, model should be cleaned up
-        assert transcriber.transcription_model is None
+        assert transcriber.model is None
 
     @patch("pathlib.Path.exists", return_value=True)
     @patch("os.path.getsize", return_value=1024)
