@@ -1,9 +1,14 @@
 """
 Performance tracking and metrics collection for transcription operations.
 
-This module provides the PerformanceTracker class for measuring and collecting
-performance metrics during transcription, alignment, and diarization
-operations.
+Three small pieces, each with one job:
+
+- :class:`Stopwatch` times a single block.
+- :class:`MetricScope` is one timed node in a metrics tree (what ``with`` and
+  :meth:`MetricScope.track` yield). Leaf writes land directly in the dict that
+  gets reported, so a read returns exactly what the tree contains.
+- :class:`PerformanceTracker` is the root accumulator that owns the top-level
+  metrics dict.
 """
 
 import logging
@@ -14,57 +19,56 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
-class PerformanceTracker:
-    """
-    A context manager for tracking performance metrics of an operation.
+class Stopwatch:
+    """Times a single block. Nothing else."""
 
-    Automatically tracks duration, handles nested operations, and allows for
-    custom metrics. Errors are logged without being suppressed.
-    """
-
-    def __init__(
-        self,
-        operation_name: str,
-        metrics_dict: Optional[Dict[str, Any]] = None,
-    ):
-        self.operation_name = operation_name
-        self.metrics_dict = metrics_dict if metrics_dict is not None else {}
+    def __init__(self) -> None:
         self.start_time: Optional[float] = None
-        self.custom_metrics: Dict[str, Any] = {}
 
-        if operation_name not in self.metrics_dict:
-            self.metrics_dict[operation_name] = {}
+    def start(self) -> None:
+        """Begin timing."""
+        self.start_time = time.time()
 
     @property
-    def duration_seconds(self) -> Optional[float]:
-        """Returns the elapsed time in seconds since the operation started."""
+    def elapsed(self) -> Optional[float]:
+        """Seconds since :meth:`start`, or ``None`` if never started."""
         if self.start_time is None:
             return None
         return time.time() - self.start_time
 
-    def _refresh_duration(self) -> None:
-        """Updates the duration in the metrics dictionary."""
-        if self.start_time is not None:
-            self.metrics_dict[self.operation_name]["duration_seconds"] = (
-                time.time() - self.start_time
-            )
 
-    def track(self, operation_name: str) -> "PerformanceTracker":
-        """Creates a nested performance tracker."""
-        self.metrics_dict[self.operation_name][operation_name] = {}
-        return PerformanceTracker(
-            operation_name,
-            self.metrics_dict[self.operation_name],
-        )
+class MetricScope:
+    """One timed node in a metrics tree.
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Returns the metrics dictionary with the latest duration."""
-        self._refresh_duration()
-        return self.metrics_dict
+    Yielded by ``with`` and returned by :meth:`track`. Custom metrics written
+    via ``scope[key] = value`` go straight into the node that gets reported, so
+    reading ``scope[key]`` returns exactly what the tree holds.
+    """
 
-    def __enter__(self) -> "PerformanceTracker":
-        """Starts the performance timer."""
-        self.start_time = time.time()
+    def __init__(self, operation_name: str, node: Dict[str, Any]) -> None:
+        self.operation_name = operation_name
+        self._node = node
+        self._stopwatch = Stopwatch()
+
+    @property
+    def start_time(self) -> Optional[float]:
+        """Timestamp this scope was entered, or ``None`` before entry."""
+        return self._stopwatch.start_time
+
+    @property
+    def duration_seconds(self) -> Optional[float]:
+        """Seconds elapsed since entry, or ``None`` before entry."""
+        return self._stopwatch.elapsed
+
+    def track(self, operation_name: str) -> "MetricScope":
+        """Open a nested scope under this one."""
+        child: Dict[str, Any] = {}
+        self._node[operation_name] = child
+        return MetricScope(operation_name, child)
+
+    def __enter__(self) -> "MetricScope":
+        """Start the timer."""
+        self._stopwatch.start()
         return self
 
     def __exit__(
@@ -73,19 +77,45 @@ class PerformanceTracker:
         exc_val: Optional[BaseException],
         exc_tb: Optional[object],
     ) -> None:
-        """Stops the timer, records metrics, and logs any exceptions."""
-        self._refresh_duration()
-        self.metrics_dict[self.operation_name].update(self.custom_metrics)
+        """Record duration and any exception (without suppressing it)."""
+        elapsed = self._stopwatch.elapsed
+        if elapsed is not None:
+            self._node["duration_seconds"] = elapsed
 
         if exc_type is not None:
             error_msg = f"{exc_type.__name__}: {exc_val}"
-            self.metrics_dict[self.operation_name]["error_message"] = error_msg
+            self._node["error_message"] = error_msg
             logger.error("Operation '%s' failed: %s", self.operation_name, error_msg)
 
     def __setitem__(self, key: str, value: Any) -> None:
-        """Sets a custom metric."""
-        self.custom_metrics[key] = value
+        """Record a custom metric directly in this node."""
+        self._node[key] = value
 
     def __getitem__(self, key: str) -> Any:
-        """Retrieves a custom metric."""
-        return self.custom_metrics.get(key)
+        """Read a custom metric from this node (``None`` if absent)."""
+        return self._node.get(key)
+
+
+class PerformanceTracker(MetricScope):
+    """Root of a metrics tree: owns the top-level dict, otherwise a scope.
+
+    Construct one per top-level operation, use it as a context manager to time
+    that operation, and :meth:`track` to open nested scopes underneath it.
+    """
+
+    def __init__(
+        self,
+        operation_name: str,
+        metrics_dict: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.metrics_dict = metrics_dict if metrics_dict is not None else {}
+        if operation_name not in self.metrics_dict:
+            self.metrics_dict[operation_name] = {}
+        super().__init__(operation_name, self.metrics_dict[operation_name])
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the metrics dict, refreshing this operation's duration."""
+        elapsed = self._stopwatch.elapsed
+        if elapsed is not None:
+            self._node["duration_seconds"] = elapsed
+        return self.metrics_dict

@@ -5,7 +5,7 @@ Tests for the PerformanceTracker class.
 from typing import Any, Dict
 import pytest
 
-from easy_whisperx.performance import PerformanceTracker
+from easy_whisperx.performance import MetricScope, PerformanceTracker
 
 
 class TestPerformanceTracker:
@@ -18,7 +18,6 @@ class TestPerformanceTracker:
         assert tracker.operation_name == "test_operation"
         assert tracker.metrics_dict is metrics
         assert tracker.start_time is None
-        assert not tracker.custom_metrics
         assert "test_operation" in metrics
         assert metrics["test_operation"] == {}
 
@@ -121,7 +120,7 @@ class TestPerformanceTracker:
 
         with PerformanceTracker("parent_op", metrics) as parent_tracker:
             nested_tracker = parent_tracker.track("nested_op")
-            assert isinstance(nested_tracker, PerformanceTracker)
+            assert isinstance(nested_tracker, MetricScope)
             assert nested_tracker.operation_name == "nested_op"
 
             # Nested tracker should have been added to parent's metrics
