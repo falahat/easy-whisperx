@@ -27,7 +27,7 @@ class TestAligner:
             device="cpu",
             language="en",
         ) as aligner:
-            assert aligner.alignment_model is not None
+            assert aligner.model is not None
             assert aligner.alignment_metadata is not None
             # Verify alignment model was loaded
             mock_whisperx.load_align_model.assert_called()
@@ -105,7 +105,7 @@ class TestMemoryManagement:
 
         # Set up alignment_metadata but keep model as None
         aligner.alignment_metadata = {"test": "data"}
-        aligner.alignment_model = None
+        aligner.model = None
 
         # Call cleanup
         aligner.__exit__(None, None, None)

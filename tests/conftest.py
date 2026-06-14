@@ -102,6 +102,12 @@ def mock_transcription_imports() -> Generator[Dict[str, MagicMock], None, None]:
         patch("easy_whisperx.aligner.whisperx", mock_whisperx),
         patch("easy_whisperx.aligner.torch", mock_torch),
         patch("easy_whisperx.diarizer.whisperx", mock_whisperx),
+        # Diarizer imports DiarizationPipeline directly from whisperx.diarize,
+        # so patch that name too (not just the whisperx module).
+        patch(
+            "easy_whisperx.diarizer.DiarizationPipeline",
+            mock_whisperx.DiarizationPipeline,
+        ),
         patch("easy_whisperx.utils.whisperx", mock_whisperx),
         patch("easy_whisperx.utils.torch", mock_torch),
         patch("easy_whisperx.base_model.torch", mock_torch),

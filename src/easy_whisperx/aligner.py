@@ -11,36 +11,24 @@ from typing import Any, Iterable
 import numpy as np
 import torch
 import whisperx
-from whisperx import AlignedTranscriptionResult, SingleSegment
+from whisperx.schema import AlignedTranscriptionResult, SingleSegment
 
 from .base_model import BaseWhisperxModel
-from .performance import PerformanceTracker
+from .performance import MetricScope
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
-class Aligner(BaseWhisperxModel[Any]):
+class Aligner(BaseWhisperxModel[torch.nn.Module]):
     """Manages the WhisperX alignment model for loading and cleanup."""
 
-    def __init__(self, device: str, language: str):
+    model_name = "alignment"
+
+    def __init__(self, language: str, device: str = "auto"):
         super().__init__(device)
         self.language = language
         self.alignment_metadata: dict[str, Any] = {}
-
-    @property
-    def model_name(self) -> str:
-        """Returns the model name for logging purposes."""
-        return "alignment"
-
-    @property
-    def alignment_model(self) -> torch.nn.Module | None:
-        """Provides backward compatibility for the loaded model."""
-        return self.model
-
-    @alignment_model.setter
-    def alignment_model(self, value: torch.nn.Module | None) -> None:
-        self.model = value
 
     def __exit__(
         self,
@@ -52,7 +40,7 @@ class Aligner(BaseWhisperxModel[Any]):
         self.alignment_metadata.clear()
         super().__exit__(exc_type, exc_val, exc_tb)
 
-    def _load_model(self, tracker: PerformanceTracker) -> None:
+    def _load_model(self, tracker: MetricScope) -> None:
         """Loads the WhisperX alignment model and its metadata."""
         tracker["language"] = self.language
         model, metadata = whisperx.load_align_model(
@@ -76,7 +64,7 @@ class Aligner(BaseWhisperxModel[Any]):
 
         logger.info("Performing word-level alignment...")
         with self.metrics.track("alignment") as tracker:
-            aligned_result = whisperx.align(
+            aligned_result: AlignedTranscriptionResult = whisperx.align(
                 transcript_segments,
                 self.model,
                 self.alignment_metadata,
