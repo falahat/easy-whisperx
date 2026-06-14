@@ -40,6 +40,16 @@ class TestTranscribePipeline:
         assert result.diarized is True
         assert result.aligned is False
 
+    def test_diarize_surfaces_speaker_embeddings(
+        self, mock_whisperx: MagicMock
+    ) -> None:
+        """Voiceprints from diarization are surfaced, not discarded."""
+        base = transcribe(np.array([0.1, 0.2, 0.3]), model_size="base")
+        assert base.speaker_embeddings is None
+
+        result = base.diarize("hf_token")
+        assert result.speaker_embeddings == {"speaker1": [0.1, 0.2]}
+
     def test_full_chain(self, mock_whisperx: MagicMock) -> None:
         """All three stages."""
         result = (

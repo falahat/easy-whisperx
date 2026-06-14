@@ -46,6 +46,9 @@ class Transcription:
     device: str
     aligned: bool = False
     diarized: bool = False
+    # Per-speaker voiceprints, keyed by the speaker labels used in the
+    # transcript. Populated by :meth:`diarize`; ``None`` until then.
+    speaker_embeddings: dict[str, list[float]] | None = None
 
     def align(self, language: str | None = None) -> "Transcription":
         """Add word-level timestamps (optional). Defaults to the detected language."""
@@ -68,7 +71,13 @@ class Transcription:
                 min_speakers=min_speakers,
                 max_speakers=max_speakers,
             )
-        return replace(self, transcript=transcript, diarized=True)
+            voices = d.speaker_embeddings or None
+        return replace(
+            self,
+            transcript=transcript,
+            diarized=True,
+            speaker_embeddings=voices,
+        )
 
 
 def transcribe(
