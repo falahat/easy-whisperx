@@ -21,4 +21,9 @@ jobs:
         pip install pylint
     - name: Analysing the code with pylint
       run: |
-        pylint $(git ls-files '*.py')
+        # src is held to full strictness. tests additionally relax the rules that
+        # only fight pytest's conventions — fixtures injected by name (redefined /
+        # unused) and the near-identical setup blocks pylint reads as duplication.
+        # These are config-level relaxations scoped to tests, not inline disables.
+        pylint src
+        pylint tests --disable=redefined-outer-name,unused-argument,duplicate-code
