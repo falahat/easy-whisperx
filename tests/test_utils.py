@@ -155,10 +155,3 @@ class TestLoadAudio:
         # Reset the mock for other tests
         mock_whisperx_load_audio.side_effect = None
         mock_whisperx_load_audio.return_value = np.array([0.1, 0.2, 0.3])
-
-
-class TestPublicUtilityFunctions:  # pylint: disable=too-few-public-methods
-    """Test publicly accessible utility functions."""
-
-    # The Episode model no longer has path methods - these are now handled
-    # by the PodcastManager class for proper separation of concerns.

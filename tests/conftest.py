@@ -2,8 +2,6 @@
 This module contains shared fixtures for the transcription tests.
 """
 
-# pylint: disable=redefined-outer-name
-
 from typing import Dict, Generator
 from unittest.mock import MagicMock, patch
 import numpy as np

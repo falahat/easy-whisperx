@@ -319,7 +319,7 @@ class TestMemoryManagement:
         mock_gc_collect.assert_called_once()
 
 
-class TestErrorHandling:  # pylint: disable=too-few-public-methods
+class TestErrorHandling:
     """Test error handling scenarios for Diarizer."""
 
     def test_diarization_failure(
@@ -369,7 +369,7 @@ class TestSkipDiarization:
             assert result is input_transcript
 
 
-class TestModelStateValidation:  # pylint: disable=too-few-public-methods
+class TestModelStateValidation:
     """Test model state validation."""
 
     def test_call_without_context_manager_raises_error(self) -> None:
@@ -513,7 +513,7 @@ class TestLogging:
             )
 
 
-class TestModelNameProperty:  # pylint: disable=too-few-public-methods
+class TestModelNameProperty:
     """Test model name property."""
 
     def test_model_name_returns_correct_value(self) -> None:

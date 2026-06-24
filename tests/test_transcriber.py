@@ -2,8 +2,6 @@
 Tests for the Transcriber class.
 """
 
-# pylint: disable=duplicate-code
-
 from unittest.mock import patch, Mock, MagicMock
 import numpy as np
 import pytest
@@ -162,7 +160,7 @@ class TestMemoryManagement:
         mock_gc_collect.assert_called_once()
 
 
-class TestErrorHandling:  # pylint: disable=too-few-public-methods
+class TestErrorHandling:
     """Test error handling scenarios for Transcriber."""
 
     def test_transcription_failure(self, mock_whisperx: MagicMock) -> None:

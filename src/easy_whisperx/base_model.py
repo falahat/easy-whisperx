@@ -8,7 +8,7 @@ handling device resolution, model loading, cleanup, and resource management.
 import abc
 import gc
 import logging
-from typing import Any, Generic, Optional, TypeVar
+from typing import Generic, Optional, TypeVar
 
 import numpy as np
 import torch
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Generic Type for the model
 _ModelT = TypeVar("_ModelT")
 # Generic Type for the class itself (for proper return type from __enter__)
-_SelfT = TypeVar("_SelfT", bound="BaseWhisperxModel[Any]")
+_SelfT = TypeVar("_SelfT", bound="BaseWhisperxModel")
 
 
 class BaseWhisperxModel(abc.ABC, Generic[_ModelT]):

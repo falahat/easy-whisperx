@@ -124,3 +124,13 @@ markers = [
     "slow: marks tests as slow",
     "integration: marks tests as integration tests",
 ]
+
+# Pylint runs at full strictness (the CI gate). There are NO inline
+# `# pylint: disable` comments; the two design thresholds below are raised from
+# pylint's conservative defaults to fit deliberate, reviewed shapes.
+[tool.pylint.design]
+# The model constructors (Transcriber/Aligner/Diarizer) and the `transcribe` entry
+# point take cohesive keyword-only config — a handful more than the default of 5.
+max-args = 7
+# Single-responsibility helpers and single-test-method classes are legitimate.
+min-public-methods = 1

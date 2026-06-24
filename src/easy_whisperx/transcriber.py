@@ -29,6 +29,7 @@ class Transcriber(BaseWhisperxModel[FasterWhisperPipeline]):
     def __init__(
         self,
         model_size: str,
+        *,
         device: str = "auto",
         compute_type: str = "auto",
         batch_size: int = 16,

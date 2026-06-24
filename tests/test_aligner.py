@@ -115,7 +115,7 @@ class TestMemoryManagement:
         mock_gc_collect.assert_called_once()
 
 
-class TestErrorHandling:  # pylint: disable=too-few-public-methods
+class TestErrorHandling:
     """Test error handling scenarios for Aligner."""
 
     def test_alignment_failure(self, mock_whisperx) -> None:

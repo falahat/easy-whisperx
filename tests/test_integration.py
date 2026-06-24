@@ -2,8 +2,6 @@
 Integration tests for the transcription pipeline.
 """
 
-# pylint: disable=duplicate-code
-
 from unittest.mock import patch, Mock
 from easy_whisperx.transcriber import Transcriber
 from easy_whisperx.aligner import Aligner
@@ -12,7 +10,7 @@ from easy_whisperx.utils import load_audio
 from easy_whisperx.performance import PerformanceTracker
 
 
-class TestIntegration:  # pylint: disable=too-few-public-methods
+class TestIntegration:
     """Test integration of multiple components."""
 
     @patch("os.path.exists", return_value=True)
@@ -71,7 +69,7 @@ class TestIntegration:  # pylint: disable=too-few-public-methods
         assert "diarization" in diarizer_metrics["diarization"]
 
 
-class TestPerformanceMetrics:  # pylint: disable=too-few-public-methods
+class TestPerformanceMetrics:
     """Test performance metrics collection."""
 
     def test_performance_metrics_collection(self) -> None:
