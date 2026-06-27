@@ -11,6 +11,13 @@ name: Upload Python Package
 on:
   release:
     types: [published]
+  # Also publish on a version-tag push (e.g. `0.1.0`), so a release can be cut without
+  # hand-creating a GitHub Release — consistent with tailnet-guard / dispatch-kit. The same
+  # `python-publish.yml` + `pypi` environment means the existing PyPI trusted publisher still
+  # matches; only the trigger is new.
+  push:
+    tags:
+      - "*.*.*"
 
 permissions:
   contents: read
