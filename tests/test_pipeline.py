@@ -5,8 +5,19 @@ Tests for the top-level transcribe() pipeline and optional-stage chaining.
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 
-from easy_whisperx import Transcription, transcribe
+from easy_whisperx import (
+    Align,
+    Diarize,
+    ModelPool,
+    Pipeline,
+    PipelineError,
+    Transcribe,
+    Transcription,
+    pipeline,
+    transcribe,
+)
 
 
 class TestTranscribePipeline:
@@ -77,3 +88,78 @@ class TestTranscribePipeline:
         assert base.aligned is False
         assert aligned.aligned is True
         assert aligned is not base
+
+
+class TestComposablePipeline:
+    """Compose steps into a Pipeline; requirements are checked and outputs reused."""
+
+    def test_factory_runs_all_three(self, mock_whisperx: MagicMock) -> None:
+        """The simple `pipeline()` factory assembles transcribe+align+diarize."""
+        result = pipeline("base", diarize=True, hf_token="tok").run(np.array([0.1]))
+
+        assert isinstance(result, Transcription)
+        assert result.aligned is True
+        assert result.diarized is True
+        assert result.speaker_embeddings == {"speaker1": [0.1, 0.2]}
+
+    def test_factory_transcription_only(self, mock_whisperx: MagicMock) -> None:
+        """align/diarize are opt-in on the factory."""
+        result = pipeline("base", align=False).run(np.array([0.1]))
+
+        assert result.aligned is False
+        assert result.diarized is False
+
+    def test_compose_with_plus(self, mock_whisperx: MagicMock) -> None:
+        """`+` composes a pipeline out of steps (and other pipelines)."""
+        pipe = Pipeline([Transcribe("base")]) + Align() + Diarize("tok")
+        result = pipe.run(np.array([0.1]))
+
+        assert result.aligned is True
+        assert result.diarized is True
+
+    def test_missing_requirement_rejected_at_construction(self) -> None:
+        """A step whose prerequisite no earlier step produces fails immediately."""
+        with pytest.raises(PipelineError):
+            Pipeline([Align()])  # no Transcribe before it
+
+    def test_already_produced_step_is_skipped(self, mock_whisperx: MagicMock) -> None:
+        """A step whose output is already present is a no-op (idempotent)."""
+        Pipeline([Transcribe("base"), Align(), Align()]).run(np.array([0.1]))
+
+        assert mock_whisperx.load_align_model.call_count == 1  # second Align skipped
+
+
+class TestPipelineLifecycle:
+    """The caller chooses whether models stay resident or are freed."""
+
+    def test_run_many_keeps_models_resident_across_the_batch(
+        self, mock_whisperx: MagicMock
+    ) -> None:
+        """run_many holds the models for the whole batch — each loads once."""
+        results = list(pipeline("base").run_many([np.array([0.1]), np.array([0.2])]))
+
+        assert len(results) == 2
+        assert mock_whisperx.load_model.call_count == 1
+        assert mock_whisperx.load_align_model.call_count == 1
+
+    def test_shared_pool_keeps_models_resident_across_runs(
+        self, mock_whisperx: MagicMock
+    ) -> None:
+        """A passed-in ModelPool (keep_loaded default) stays resident across runs."""
+        pipe = pipeline("base")
+        with ModelPool() as pool:
+            pipe.run(np.array([0.1]), pool=pool)
+            pipe.run(np.array([0.2]), pool=pool)
+
+        assert mock_whisperx.load_model.call_count == 1
+
+    def test_keep_loaded_false_frees_each_step_so_it_reloads(
+        self, mock_whisperx: MagicMock
+    ) -> None:
+        """keep_loaded=False frees a model the instant its step finishes."""
+        pipe = pipeline("base")
+        with ModelPool(keep_loaded=False) as pool:
+            pipe.run(np.array([0.1]), pool=pool)
+            pipe.run(np.array([0.2]), pool=pool)  # freed after each step -> reload
+
+        assert mock_whisperx.load_model.call_count == 2

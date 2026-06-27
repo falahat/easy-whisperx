@@ -1,83 +1,119 @@
-"""
-Top-level convenience orchestrator: transcribe, then optionally align/diarize.
+"""The composable :class:`Pipeline` plus the simple front door.
 
-:func:`transcribe` runs the transcription stage and returns a
-:class:`Transcription`. Alignment and diarization are *optional* follow-up
-steps you chain only if you want them::
+A ``Pipeline`` is an ordered, composable sequence of
+:class:`~easy_whisperx.steps.Step`s. Build one from a list, compose with ``+`` /
+:meth:`Pipeline.then`, and run it; the model VRAM lifecycle is a
+:class:`~easy_whisperx.pool.ModelPool` you control (default: held for the run, freed at
+the end).
 
-    result = transcribe("ep.mp3", model_size="large-v2")        # transcription only
-    result = transcribe("ep.mp3", model_size="large-v2").align()
-    result = transcribe("ep.mp3", model_size="large-v2").diarize(hf_token=tok)
-    result = (transcribe("ep.mp3", model_size="large-v2")
-              .align().diarize(hf_token=tok))                     # all three
+You rarely build steps by hand. The simple entry points hide all of it::
 
-Each stage loads and unloads exactly one model, so at most one model occupies
-VRAM at a time. The decoded audio is reused across stages.
+    transcribe("ep.mp3", model_size="large-v3")              # one file, transcript only
+    pipeline("large-v3", diarize=True, hf_token=tok).run("ep.mp3")     # one file, all 3
+    for r in pipeline("large-v3", hf_token=tok).run_many(paths): ...   # resident batch
 """
 
-import logging
-from dataclasses import dataclass, replace
+from __future__ import annotations
+
+from collections.abc import Iterable, Iterator, Sequence
 
 import numpy as np
-from whisperx.schema import AlignedTranscriptionResult, TranscriptionResult
 
-from .aligner import Aligner
-from .diarizer import Diarizer
-from .transcriber import Transcriber
+from .pool import ModelPool
+from .result import Capability, PipelineError, Transcription
+from .steps import Align, Diarize, Step, Transcribe
 from .utils import load_audio
 
-# Configure logging
-logger = logging.getLogger(__name__)
 
+class Pipeline:
+    """An ordered, composable sequence of steps with an explicit model lifecycle.
 
-@dataclass(frozen=True)
-class Transcription:
-    """Result of :func:`transcribe`, with optional follow-up stages.
-
-    ``transcript`` is the most-processed result so far (raw, aligned, or
-    speaker-labeled). :meth:`align` and :meth:`diarize` each return a *new*
-    ``Transcription`` and load/unload one model. The ``aligned``/``diarized``
-    flags say which stages have run, so callers need not inspect the dict shape.
+    Validated at construction: a step whose requirement no earlier step produces (an
+    ``Align`` with no ``Transcribe`` before it, say) fails immediately with a clear
+    message instead of deep inside whisperx.
     """
 
-    transcript: TranscriptionResult | AlignedTranscriptionResult
-    audio: np.ndarray
-    language: str
-    device: str
-    aligned: bool = False
-    diarized: bool = False
-    # Per-speaker voiceprints, keyed by the speaker labels used in the
-    # transcript. Populated by :meth:`diarize`; ``None`` until then.
-    speaker_embeddings: dict[str, list[float]] | None = None
+    def __init__(self, steps: Sequence[Step]) -> None:
+        self._steps = tuple(steps)
+        self._validate()
 
-    def align(self, language: str | None = None) -> "Transcription":
-        """Add word-level timestamps (optional). Defaults to the detected language."""
-        with Aligner(language=language or self.language, device=self.device) as a:
-            transcript = a(self.transcript["segments"], self.audio)
-        return replace(self, transcript=transcript, aligned=True)
-
-    def diarize(
+    def run(
         self,
-        hf_token: str,
+        audio: str | np.ndarray,
         *,
-        min_speakers: int = 0,
-        max_speakers: int = 10,
-    ) -> "Transcription":
-        """Add speaker labels (optional). Works with or without prior alignment."""
-        with Diarizer(hf_token=hf_token, device=self.device) as d:
-            transcript = d(
-                self.transcript,
-                self.audio,
-                min_speakers=min_speakers,
-                max_speakers=max_speakers,
-            )
-            voices = d.speaker_embeddings or None
-        return replace(
-            self,
-            transcript=transcript,
-            diarized=True,
-            speaker_embeddings=voices,
-        )
+        pool: ModelPool | None = None,
+        keep_loaded: bool = True,
+    ) -> Transcription:
+        """Transcribe one input through every step.
+
+        With ``pool`` given, reuse it (models stay resident across runs). Otherwise a
+        transient pool is used and freed at the end of this run; ``keep_loaded`` chooses
+        whether its models are held for the whole run (default) or freed per step.
+        """
+        if pool is not None:
+            return self._run(audio, pool)
+        with ModelPool(keep_loaded=keep_loaded) as own_pool:
+            return self._run(audio, own_pool)
+
+    def run_many(
+        self, audios: Iterable[str | np.ndarray], *, keep_loaded: bool = True
+    ) -> Iterator[Transcription]:
+        """Transcribe each input with the models held resident across the whole batch,
+        freed at the end — the common 'transcribe a bunch of files' case, no pool
+        management. Lazy: yields each result as it is produced."""
+        with ModelPool(keep_loaded=keep_loaded) as pool:
+            for audio in audios:
+                yield self._run(audio, pool)
+
+    def then(self, step: Step) -> "Pipeline":
+        """A new pipeline with ``step`` appended."""
+        return Pipeline((*self._steps, step))
+
+    def __add__(self, other: "Step | Pipeline") -> "Pipeline":
+        """Compose with a step or another pipeline."""
+        extra = other._steps if isinstance(other, Pipeline) else (other,)
+        return Pipeline((*self._steps, *extra))
+
+    def _run(self, audio: str | np.ndarray, pool: ModelPool) -> Transcription:
+        audio_data = load_audio(audio) if isinstance(audio, str) else audio
+        state: Transcription | None = None
+        for step in self._steps:
+            state = step.apply(state, audio_data, pool)
+        if state is None:
+            raise PipelineError("pipeline has no step that produces a transcript")
+        return state
+
+    def _validate(self) -> None:
+        have: set[Capability] = set()
+        for step in self._steps:
+            missing = step.requires - have
+            if missing:
+                names = ", ".join(sorted(cap.value for cap in missing))
+                raise PipelineError(
+                    f"step {step.name!r} needs {names} "
+                    "but no earlier step produces it"
+                )
+            have.add(step.produces)
+
+
+def pipeline(
+    model_size: str,
+    *,
+    align: bool = True,
+    diarize: bool = False,
+    hf_token: str | None = None,
+) -> Pipeline:
+    """Build the standard ``[Transcribe, Align?, Diarize?]`` pipeline — the simple way
+    to get a composed pipeline without assembling steps. For finer control (device,
+    batch_size, speaker bounds, custom stages) build a :class:`Pipeline` from steps."""
+    steps: list[Step] = [Transcribe(model_size)]
+    if align:
+        steps.append(Align())
+    if diarize:
+        if hf_token is None:
+            raise PipelineError("diarize=True needs an hf_token")
+        steps.append(Diarize(hf_token))
+    return Pipeline(steps)
 
 
 def transcribe(
@@ -89,30 +125,15 @@ def transcribe(
     batch_size: int = 16,
     language: str | None = None,
 ) -> Transcription:
-    """Transcribe audio.
-
-    Chain :meth:`Transcription.align` and/or :meth:`Transcription.diarize` on
-    the result to add those optional stages.
-    """
-    # Decode once; the array is reused by any chained stage (each stage's
-    # _load_audio_if_needed short-circuits on an ndarray).
-    audio_data = load_audio(audio) if isinstance(audio, str) else audio
-
-    with Transcriber(
+    """Transcribe one input (transcription only); chain :meth:`Transcription.align`
+    and/or :meth:`Transcription.diarize` to add those stages. Loads and frees the model
+    for this one call — for many files use :func:`pipeline` + :meth:`Pipeline.run_many`
+    to keep it resident."""
+    transcriber = Transcribe(
         model_size,
         device=device,
         compute_type=compute_type,
         batch_size=batch_size,
         language=language,
-    ) as transcriber:
-        transcript = transcriber(audio_data)
-        resolved_device = transcriber.device  # concrete device for later stages
-    # Transcriber.__exit__ has freed the ASR model before any chained stage.
-
-    result_language = language or transcript.get("language") or "en"
-    return Transcription(
-        transcript=transcript,
-        audio=audio_data,
-        language=result_language,
-        device=resolved_device,
     )
+    return Pipeline([transcriber]).run(audio, keep_loaded=False)
