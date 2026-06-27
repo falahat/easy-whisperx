@@ -9,20 +9,41 @@ import-only check.
 
 import easy_whisperx
 from easy_whisperx import (
+    Align,
     Aligner,
     BaseWhisperxModel,
+    Capability,
+    Diarize,
     Diarizer,
+    ModelPool,
     PerformanceTracker,
+    Pipeline,
+    PipelineError,
+    Step,
+    Transcribe,
     Transcriber,
     Transcription,
     load_audio,
+    pipeline,
     transcribe,
 )
 
 # Keep this in lockstep with easy_whisperx.__all__.
 EXPECTED_PUBLIC_NAMES = {
+    # simple
     "transcribe",
+    "pipeline",
+    "Pipeline",
     "Transcription",
+    # power
+    "Step",
+    "Transcribe",
+    "Align",
+    "Diarize",
+    "ModelPool",
+    "Capability",
+    "PipelineError",
+    # low-level stages + helpers
     "Transcriber",
     "Aligner",
     "Diarizer",
@@ -50,11 +71,24 @@ class TestPublicApi:
         for model_cls in (Transcriber, Aligner, Diarizer):
             assert issubclass(model_cls, BaseWhisperxModel)
 
+    def test_steps_subclass_step(self) -> None:
+        """The three built-in steps share the composable Step base."""
+        for step_cls in (Transcribe, Align, Diarize):
+            assert issubclass(step_cls, Step)
+
     def test_entry_points_callable(self) -> None:
         """Exported entry points are callable as advertised."""
         for obj in (
             transcribe,
+            pipeline,
+            Pipeline,
             Transcription,
+            Transcribe,
+            Align,
+            Diarize,
+            ModelPool,
+            Capability,
+            PipelineError,
             Transcriber,
             Aligner,
             Diarizer,
