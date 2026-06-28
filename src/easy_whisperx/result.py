@@ -14,14 +14,17 @@ an already-loaded, possibly resident model).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, replace
 from enum import Enum
 
 import numpy as np
 from whisperx.schema import AlignedTranscriptionResult, TranscriptionResult
 
-from .aligner import Aligner
+from .aligner import Aligner, alignment_available
 from .diarizer import Diarizer
+
+logger = logging.getLogger(__name__)
 
 
 class Capability(Enum):
@@ -69,8 +72,17 @@ class Transcription:
 
     def align(self, language: str | None = None) -> "Transcription":
         """Add word-level timestamps (loads then frees one alignment model). Defaults to
-        the detected language."""
-        with Aligner(language=language or self.language, device=self.device) as aligner:
+        the detected language; if no alignment model exists for it (a misdetected
+        language), logs a warning and returns the transcript unaligned, never raising.
+        """
+        language = language or self.language
+        if not alignment_available(language):
+            logger.warning(
+                "no alignment model for language %r — keeping the unaligned transcript",
+                language,
+            )
+            return self
+        with Aligner(language=language, device=self.device) as aligner:
             return self.with_alignment(aligner, self.audio)
 
     def with_alignment(self, aligner: Aligner, audio: np.ndarray) -> "Transcription":

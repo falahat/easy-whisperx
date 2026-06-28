@@ -6,7 +6,7 @@ from unittest.mock import patch, Mock
 import numpy as np
 import pytest
 
-from easy_whisperx.aligner import Aligner
+from easy_whisperx.aligner import Aligner, alignment_available
 
 
 class TestAligner:
@@ -20,6 +20,14 @@ class TestAligner:
         )
         assert aligner.device == "cpu"
         assert aligner.language == "en"
+
+    def test_alignment_available_for_supported_languages_only(self) -> None:
+        """alignment_available mirrors whisperx's model table: a real language is
+        supported, a misdetected/exotic code (la/jw) is not — so callers can skip."""
+        assert alignment_available("en") is True
+        assert alignment_available("fr") is True
+        assert alignment_available("la") is False  # Latin — no whisperx align model
+        assert alignment_available("jw") is False  # Javanese — no whisperx align model
 
     def test_aligner_context_manager(self, mock_whisperx) -> None:
         """Test aligner context manager behavior."""

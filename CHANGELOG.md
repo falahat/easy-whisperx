@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.1
+
+### Fixed
+- **A mis-detected language no longer fails the whole transcribe.** When WhisperX
+  mis-detects the language of audio (e.g. an atmospheric intro detected as Latin `la`
+  or Javanese `jw`), there is no default alignment model, and loading one raised
+  `ValueError` — which aborted the entire transcription, losing the transcript too.
+  `Align` (the step) and `Transcription.align()` (the chain) now check the new
+  **`easy_whisperx.aligner.alignment_available(language)`** first; when no model exists
+  they log a warning and return the **unaligned** transcript. Transcription — and
+  diarization, which doesn't need word-level alignment — still succeed.
+
 ## 0.1.0
 
 A focused overhaul of the public API, ergonomics, and internals. There are

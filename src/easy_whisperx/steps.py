@@ -11,17 +11,20 @@ capabilities or the pool for the built-in stages.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import cast
 
 import numpy as np
 
-from .aligner import Aligner
+from .aligner import Aligner, alignment_available
 from .diarizer import Diarizer
 from .pool import ModelPool
 from .result import Capability, PipelineError, Transcription
 from .transcriber import Transcriber
+
+logger = logging.getLogger(__name__)
 
 
 def _names(caps: Iterable[Capability]) -> str:
@@ -126,6 +129,13 @@ class Align(Step):
     ) -> Transcription:
         result = cast(Transcription, state)  # apply() guarantees TRANSCRIPT is present
         language = self.language or result.language
+        if not alignment_available(language):
+            logger.warning(
+                "no alignment model for language %r — keeping the unaligned transcript "
+                "(likely a misdetected language)",
+                language,
+            )
+            return result
         key = ("align", language, result.device)
         with pool.acquire(
             key, lambda: Aligner(language=language, device=result.device)
