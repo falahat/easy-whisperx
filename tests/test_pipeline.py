@@ -42,6 +42,20 @@ class TestTranscribePipeline:
         assert result.diarized is False
         mock_whisperx.load_align_model.assert_called()
 
+    def test_align_skips_unsupported_language(self, mock_whisperx: MagicMock) -> None:
+        """A misdetected/unsupported language degrades to an unaligned transcript — the
+        whole transcribe must not fail just because alignment can't run (the NoSleep
+        'Detected language: la' incident)."""
+        mock_whisperx.load_model.return_value.transcribe.return_value = {
+            "language": "la",  # WhisperX misdetecting English audio as Latin
+            "segments": [{"start": 0, "end": 5, "text": "Hello"}],
+        }
+        result = transcribe(np.array([0.1, 0.2, 0.3]), model_size="base").align()
+
+        assert result.language == "la"
+        assert result.aligned is False  # degraded gracefully, not aligned
+        mock_whisperx.load_align_model.assert_not_called()  # never even attempted
+
     def test_chain_diarize_without_align(self, mock_whisperx: MagicMock) -> None:
         """Diarization without alignment is a valid subset."""
         result = transcribe(np.array([0.1, 0.2, 0.3]), model_size="base").diarize(
@@ -127,6 +141,22 @@ class TestComposablePipeline:
         Pipeline([Transcribe("base"), Align(), Align()]).run(np.array([0.1]))
 
         assert mock_whisperx.load_align_model.call_count == 1  # second Align skipped
+
+    def test_align_step_skips_unsupported_language(
+        self, mock_whisperx: MagicMock
+    ) -> None:
+        """The composable Align step degrades on an unsupported language too; a later
+        Diarize still runs on the unaligned transcript (it needs only the transcript).
+        """
+        mock_whisperx.load_model.return_value.transcribe.return_value = {
+            "language": "jw",  # Javanese — no whisperx alignment model
+            "segments": [{"start": 0, "end": 5, "text": "Hello"}],
+        }
+        result = pipeline("base", diarize=True, hf_token="tok").run(np.array([0.1]))
+
+        assert result.aligned is False  # align degraded
+        assert result.diarized is True  # diarization still ran
+        mock_whisperx.load_align_model.assert_not_called()
 
 
 class TestPipelineLifecycle:

@@ -11,6 +11,7 @@ from typing import Any, Iterable
 import numpy as np
 import torch
 import whisperx
+from whisperx.alignment import DEFAULT_ALIGN_MODELS_HF, DEFAULT_ALIGN_MODELS_TORCH
 from whisperx.schema import AlignedTranscriptionResult, SingleSegment
 
 from .base_model import BaseWhisperxModel
@@ -18,6 +19,17 @@ from .performance import MetricScope
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+def alignment_available(language: str) -> bool:
+    """Whether whisperx ships a default word-alignment model for ``language``.
+
+    A wrong or low-confidence language detection (e.g. ``la`` / ``jw`` on English audio)
+    has no alignment model, and trying to load one raises ``ValueError``. Callers check
+    this first and skip alignment (keeping the unaligned transcript) instead of failing
+    the whole transcribe. Mirrors ``whisperx.load_align_model``'s own lookup.
+    """
+    return language in DEFAULT_ALIGN_MODELS_TORCH or language in DEFAULT_ALIGN_MODELS_HF
 
 
 class Aligner(BaseWhisperxModel[torch.nn.Module]):
