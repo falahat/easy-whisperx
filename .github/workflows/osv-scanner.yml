@@ -1,0 +1,29 @@
+# Automatic, fail-closed vulnerability gate. OSV-Scanner reads every committed lockfile in
+# the repo (uv.lock here; Cargo.lock / go.sum / package-lock.json elsewhere) and checks each
+# pinned version — the FULL transitive graph — against the OSV database (PyPA, RustSec, GHSA,
+# the Go vuln DB). A known-vulnerable or yanked dependency fails the run, so it cannot merge
+# to or deploy from main. Runs on every push + PR and weekly (a version can be disclosed as
+# vulnerable long after it merged clean). Pairs with Dependabot (.github/dependabot.yml),
+# which opens the upgrade PRs this gate re-checks. The action ref is version-pinned and kept
+# current by the github-actions Dependabot entry.
+name: osv-scanner
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "30 12 * * 1" # Mondays 12:30 UTC
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+jobs:
+  # Full scan of every committed lockfile against OSV, on push + weekly.
+  scan:
+    if: ${{ github.event_name != 'pull_request' }}
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
+  # PR scan: fails the check when a PR introduces a dependency with a known vulnerability.
+  scan-pr:
+    if: ${{ github.event_name == 'pull_request' }}
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.3.8

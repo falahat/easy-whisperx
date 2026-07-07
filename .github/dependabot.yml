@@ -1,0 +1,26 @@
+# Dependabot — the automatic half of the supply-chain posture: currency + disclosure.
+# It watches the manifests below, opens an upgrade PR per new release, and (with the repo's
+# Dependabot security alerts enabled) flags the moment a pinned version is disclosed as
+# vulnerable — answering "are we behind?" and "is anything we ship now known-bad?" without
+# anyone remembering to look. The osv-scanner workflow re-checks every PR fail-closed before
+# merge. Minor+patch bumps are grouped into one PR to cut noise; majors arrive as individual,
+# reviewable PRs (they can carry breaking changes that need the gates to vet co-compatibility).
+version: 2
+updates:
+  # Python: pyproject.toml dependencies + optional-dependencies (uv.lock is the pinned graph
+  # osv-scanner audits; this entry keeps the declared ranges current). torch/pyannote are
+  # deliberately ceiling-pinned here — Dependabot will still surface newer versions as PRs,
+  # which the test gates then vet for co-compatibility before anything merges.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+  # The CI actions are themselves executable supply chain — keep their pinned refs current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
