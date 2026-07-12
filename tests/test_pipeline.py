@@ -44,7 +44,7 @@ class TestTranscribePipeline:
 
     def test_align_skips_unsupported_language(self, mock_whisperx: MagicMock) -> None:
         """A misdetected/unsupported language degrades to an unaligned transcript — the
-        whole transcribe must not fail just because alignment can't run (the [scrubbed]
+        whole transcribe must not fail just because alignment can't run (the real-world
         'Detected language: la' incident)."""
         mock_whisperx.load_model.return_value.transcribe.return_value = {
             "language": "la",  # WhisperX misdetecting English audio as Latin
