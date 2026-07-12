@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.3
+
+### Changed
+- Test-suite housekeeping only: a real-world reference removed from a test
+  docstring. No runtime changes. (Published so the current sdist on PyPI carries
+  the cleaned test suite — sdists ship `tests/`.)
+
+## 0.1.2
+
+### Changed
+- deps: require `whisperx>=3.8.7rc1`, pulling transformers 5.13 (clears the open
+  transformers CVE set) and pyannote-audio 4.0.7. No API changes.
+
 ## 0.1.1
 
 ### Fixed
