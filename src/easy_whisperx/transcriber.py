@@ -21,6 +21,23 @@ from .utils import resolve_device_config
 logger = logging.getLogger(__name__)
 
 
+def _is_empty_pipeline_input(error: IndexError) -> bool:
+    """Recognize Transformers rejecting WhisperX's empty VAD batch."""
+    traceback = error.__traceback__
+    while traceback is not None:
+        frame = traceback.tb_frame
+        inputs = frame.f_locals.get("inputs")
+        if (
+            frame.f_globals.get("__name__") == "transformers.pipelines.base"
+            and frame.f_code.co_name == "__call__"
+            and isinstance(inputs, list)
+            and not inputs
+        ):
+            return True
+        traceback = traceback.tb_next
+    return False
+
+
 class Transcriber(BaseWhisperxModel[FasterWhisperPipeline]):
     """Manages the transcription model for audio-to-text conversion."""
 
@@ -68,7 +85,19 @@ class Transcriber(BaseWhisperxModel[FasterWhisperPipeline]):
 
         logger.info("Transcribing audio...")
         with self.metrics.track("transcription") as tracker:
-            result = self.model.transcribe(audio_data, batch_size=self.batch_size)
+            try:
+                result = self.model.transcribe(audio_data, batch_size=self.batch_size)
+            except IndexError as exc:
+                if not _is_empty_pipeline_input(exc):
+                    raise
+                tokenizer = self.model.tokenizer
+                language = self.language or (
+                    tokenizer.language_code if tokenizer is not None else "en"
+                )
+                if self.model.preset_language is None:
+                    self.model.tokenizer = None
+                result = {"segments": [], "language": language}
+                logger.info("No active speech; returning an empty transcript.")
             tracker["batch_size"] = self.batch_size
             tracker["segments_count"] = len(result.get("segments", []))
 

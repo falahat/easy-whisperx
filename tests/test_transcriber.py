@@ -186,3 +186,31 @@ class TestErrorHandling:
             "segments": [{"start": 0, "end": 5, "text": "Hello world"}],
             "performance_metrics": {"transcription_duration": 1.0},
         }
+
+    @patch("easy_whisperx.transcriber._is_empty_pipeline_input", return_value=True)
+    def test_empty_vad_batch_returns_empty_transcript(
+        self, _empty_input: Mock, mock_whisperx: MagicMock
+    ) -> None:
+        """No speech is a valid empty transcript."""
+        model = mock_whisperx.load_model.return_value
+        model.transcribe.side_effect = IndexError("list index out of range")
+        model.tokenizer.language_code = "en"
+        model.preset_language = None
+
+        with Transcriber("base", device="cpu", compute_type="int8") as transcriber:
+            result = transcriber(np.array([0.1, 0.2, 0.3]))
+
+        assert result == {"segments": [], "language": "en"}
+        assert model.tokenizer is None
+
+    @patch("easy_whisperx.transcriber._is_empty_pipeline_input", return_value=False)
+    def test_unrelated_index_error_is_not_hidden(
+        self, _not_empty_input: Mock, mock_whisperx: MagicMock
+    ) -> None:
+        """Only the confirmed empty-input failure degrades to empty."""
+        model = mock_whisperx.load_model.return_value
+        model.transcribe.side_effect = IndexError("corrupt output")
+
+        with Transcriber("base", device="cpu", compute_type="int8") as transcriber:
+            with pytest.raises(IndexError, match="corrupt output"):
+                transcriber(np.array([0.1, 0.2, 0.3]))
